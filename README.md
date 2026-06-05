@@ -24,9 +24,16 @@ a 2D world map. Built for tracking the payload aboard **D-Orbit's ION SCV
 
 <satellite-tracker
   satellite-name="Astounding Alexandra"
-  label="ION SCV Astounding Alexandra">
+  label="QUBITCORE"
+  operator="Qubitrium">
 </satellite-tracker>
 ```
+
+`QUBITCORE` is a hosted payload, so it shares the orbit of its carrier,
+D-Orbit's **ION SCV Astounding Alexandra**. The widget therefore tracks the
+carrier (`satellite-name`) but displays your payload's name (`label`) and
+operator. The view defaults to the interactive **globe**; add `view="map"`
+for the flat map.
 
 Open `index.html` for a full demo page.
 
@@ -62,7 +69,8 @@ export function PayloadMap() {
   return (
     <satellite-tracker
       satellite-name="Astounding Alexandra"
-      label="ION SCV Astounding Alexandra"
+      label="QUBITCORE"
+      operator="Qubitrium"
     />
   );
 }
@@ -76,8 +84,9 @@ export function PayloadMap() {
 | `norad-id`        | —                      | NORAD catalog number. Takes precedence over `satellite-name` when set.      |
 | `tle-line1`       | —                      | Manual TLE line 1. With `tle-line2`, skips the network entirely.            |
 | `tle-line2`       | —                      | Manual TLE line 2.                                                          |
-| `label`           | name from TLE          | Display name shown in the UI.                                               |
-| `view`            | `map`                  | Initial view: `map` or `globe`.                                            |
+| `label`           | name from TLE          | Display name shown in the UI (e.g. your payload `QUBITCORE`).               |
+| `operator`        | —                      | Operator name shown as a chip above the label (e.g. `Qubitrium`).          |
+| `view`            | `globe`                | Initial view: `globe` or `map`.                                           |
 | `update-interval` | `1000`                 | Position refresh in milliseconds.                                           |
 | `show-footprint`  | `true`                 | Draw the ground coverage circle.                                            |
 | `show-track`      | `true`                 | Draw the ground track for one orbit.                                        |

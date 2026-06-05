@@ -3,45 +3,73 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ION SCV Astounding Alexandra — Live Payload Tracker</title>
+  <title>QUBITCORE — Live Tracker · Qubitrium</title>
   <style>
+    :root {
+      --brand: #7c5cff;     /* Qubitrium violet */
+      --brand-2: #38bdf8;   /* cyan accent */
+      --ink: #e7eaf3;
+      --muted: #9aa3b8;
+    }
+    * { box-sizing: border-box; }
     body {
       margin: 0;
       min-height: 100vh;
-      background: radial-gradient(140% 120% at 50% -10%, #15233f 0%, #060a14 60%);
-      color: #e2e8f0;
+      background:
+        radial-gradient(1100px 600px at 50% -8%, rgba(124,92,255,.18) 0%, transparent 60%),
+        radial-gradient(140% 120% at 50% 0%, #131a2e 0%, #05070e 60%);
+      color: var(--ink);
       font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 40px 16px;
-      box-sizing: border-box;
+      padding: 36px 16px 56px;
     }
-    header { text-align: center; margin-bottom: 22px; max-width: 720px; }
-    h1 { margin: 0 0 6px; font-size: clamp(20px, 4vw, 30px); }
-    p.sub { margin: 0; color: #94a3b8; font-size: 15px; }
-    main { width: 100%; max-width: 920px; }
+    .brandbar {
+      display: flex; align-items: center; gap: 10px; margin-bottom: 26px;
+      font-weight: 800; letter-spacing: 3px; font-size: 14px; text-transform: uppercase;
+    }
+    .brandbar .mark {
+      width: 26px; height: 26px; border-radius: 7px;
+      background: conic-gradient(from 210deg, var(--brand), var(--brand-2), var(--brand));
+      box-shadow: 0 0 18px rgba(124,92,255,.6);
+    }
+    .brandbar span { background: linear-gradient(90deg, #fff, #c7b9ff);
+                     -webkit-background-clip: text; background-clip: text; color: transparent; }
+    header { text-align: center; margin-bottom: 24px; max-width: 760px; }
+    .eyebrow { color: var(--brand); font-weight: 700; letter-spacing: 2px;
+               text-transform: uppercase; font-size: 12px; margin: 0 0 8px; }
+    h1 { margin: 0 0 10px; font-size: clamp(28px, 6vw, 52px); line-height: 1.05;
+         background: linear-gradient(90deg, #ffffff 0%, #b9c7ff 60%, #38bdf8 100%);
+         -webkit-background-clip: text; background-clip: text; color: transparent; }
+    p.sub { margin: 0 auto; color: var(--muted); font-size: 16px; max-width: 620px; line-height: 1.5; }
+    p.sub strong { color: var(--ink); }
+    main { width: 100%; max-width: 940px; margin-top: 8px; }
     satellite-tracker { display: block; }
-    footer { margin-top: 18px; color: #64748b; font-size: 12px; text-align: center; }
-    footer a { color: #94a3b8; }
+    footer { margin-top: 22px; color: #64748b; font-size: 12px; text-align: center; }
+    footer a { color: #9aa3b8; }
   </style>
 </head>
 <body>
+  <div class="brandbar"><span class="mark"></span><span>Qubitrium</span></div>
+
   <header>
-    <h1>🛰️ Our Payload — Live Location</h1>
+    <p class="eyebrow">Live mission telemetry</p>
+    <h1>QUBITCORE</h1>
     <p class="sub">
-      Hosted aboard D-Orbit's <strong>ION SCV Astounding Alexandra</strong>.
-      Position computed in your browser from public orbital elements, refreshed every second.
-      Switch between <strong>Map</strong> and <strong>Globe</strong>, and set your location
-      to see the next passes overhead.
+      Qubitrium's payload in orbit — flying aboard D-Orbit's
+      <strong>ION SCV Astounding Alexandra</strong>. Its position is computed live
+      in your browser and refreshed every second. Spin the globe, switch to the map,
+      and set your location to see when QUBITCORE passes overhead.
     </p>
   </header>
 
   <main>
     <satellite-tracker
       satellite-name="Astounding Alexandra"
-      label="ION SCV Astounding Alexandra"
-      view="map"
+      label="QUBITCORE"
+      operator="Qubitrium"
+      view="globe"
       show-footprint="true"
       show-track="true"
       show-terminator="true"

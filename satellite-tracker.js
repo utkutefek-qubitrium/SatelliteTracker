@@ -150,7 +150,7 @@ class SatelliteTracker extends HTMLElement {
   }
 
   connectedCallback() {
-    this._view = (this.getAttribute('view') || 'map').toLowerCase() === 'globe' ? 'globe' : 'map';
+    this._view = (this.getAttribute('view') || 'globe').toLowerCase() === 'map' ? 'map' : 'globe';
     this._renderShell();
     this._restoreObserver();
     this._start();
@@ -176,6 +176,7 @@ class SatelliteTracker extends HTMLElement {
       tle1: this.getAttribute('tle-line1') || '',
       tle2: this.getAttribute('tle-line2') || '',
       label: this.getAttribute('label') || '',
+      operator: this.getAttribute('operator') || '',
       interval: Math.max(250, parseInt(this.getAttribute('update-interval'), 10) || 1000),
       footprint: bool('show-footprint', true),
       track: bool('show-track', true),
@@ -499,7 +500,9 @@ class SatelliteTracker extends HTMLElement {
     const incl = this._satrec.inclo / DEG;
 
     this._els.name.textContent = this._label();
-    this._els.norad.textContent = this._noradId ? `NORAD ${this._noradId}` : '';
+    if (cfg.operator) { this._els.operator.textContent = cfg.operator; this._els.operator.hidden = false; }
+    const carrier = this._tleName && this._tleName !== this._label() ? `aboard ${this._tleName}` : '';
+    this._els.norad.textContent = [this._noradId ? `NORAD ${this._noradId}` : '', carrier].filter(Boolean).join(' · ');
     this._set('lat', `${f(Math.abs(lat), 3)}° ${lat >= 0 ? 'N' : 'S'}`);
     this._set('lon', `${f(Math.abs(lon), 3)}° ${lon >= 0 ? 'E' : 'W'}`);
     this._set('alt', altDisp);
@@ -729,7 +732,10 @@ class SatelliteTracker extends HTMLElement {
         .panel { position:absolute; top:12px; left:12px; background:var(--panel);
                  backdrop-filter:blur(6px); border:1px solid rgba(148,163,184,.2);
                  border-radius:10px; padding:10px 12px; min-width:178px; font-size:13px; line-height:1.35; }
-        .panel h3 { margin:0 0 2px; font-size:14px; font-weight:650; }
+        .operator { display:inline-block; font-size:10px; font-weight:800; letter-spacing:1.5px;
+                    text-transform:uppercase; color:#c7b9ff; background:rgba(124,92,255,.16);
+                    border:1px solid rgba(124,92,255,.5); border-radius:5px; padding:2px 7px; margin-bottom:6px; }
+        .panel h3 { margin:0 0 2px; font-size:15px; font-weight:750; }
         .norad { color:var(--muted); font-size:11px; margin-bottom:8px; }
         .grid { display:grid; grid-template-columns:auto auto; gap:2px 14px; }
         .grid .k { color:var(--muted); }
@@ -774,7 +780,8 @@ class SatelliteTracker extends HTMLElement {
         .footer { display:flex; justify-content:space-between; gap:8px; padding:7px 12px;
                   font-size:11px; color:var(--muted); border-top:1px solid rgba(148,163,184,.14); }
         .overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-                   background:rgba(8,12,24,.7); font-size:14px; text-align:center; padding:20px; }
+                   background:rgba(8,12,24,.7); font-size:14px; text-align:center; padding:20px;
+                   pointer-events:none; }
         .overlay[data-state="error"] { color:#fca5a5; }
         @media (max-width:560px){
           .panel { min-width:0; left:8px; top:8px; padding:8px 10px; font-size:12px; }
@@ -816,6 +823,7 @@ class SatelliteTracker extends HTMLElement {
           </svg>
 
           <div class="panel">
+            <div class="operator" id="operator" hidden></div>
             <h3 id="name">Satellite</h3>
             <div class="norad" id="norad"></div>
             <div class="grid">
@@ -870,7 +878,7 @@ class SatelliteTracker extends HTMLElement {
       svg: $('svg'), scene: $('scene'), map: $('map'), night: $('night'), track: $('track'),
       footprint: $('footprint'), sat: $('sat'), observer: $('observer'),
       oceanRect: $('oceanRect'), oceanDisc: $('oceanDisc'),
-      name: $('name'), norad: $('norad'), lat: $('lat'), lon: $('lon'), alt: $('alt'),
+      operator: $('operator'), name: $('name'), norad: $('norad'), lat: $('lat'), lon: $('lon'), alt: $('alt'),
       spd: $('spd'), period: $('period'), incl: $('incl'),
       status: $('status'), statusText: $('statusText'), epoch: $('epoch'), updated: $('updated'),
       overlay: $('overlay'), overlayMsg: $('overlayMsg'),
@@ -905,6 +913,9 @@ class SatelliteTracker extends HTMLElement {
       this._els.scene.setAttribute('clip-path', 'url(#discClip)');
       svg.style.cursor = 'grab';
     }
+    // Draw an immediate basemap (graticule globe / map) so the view is visible
+    // and interactive even before orbital data finishes loading.
+    this._drawBasemap();
   }
 }
 
