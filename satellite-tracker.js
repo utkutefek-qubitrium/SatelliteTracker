@@ -229,26 +229,57 @@ class SatelliteTracker extends HTMLElement {
     const query = cfg.noradId
       ? `CATNR=${encodeURIComponent(cfg.noradId)}`
       : `NAME=${encodeURIComponent(cfg.name)}`;
-    const url = `${cfg.proxy}https://celestrak.org/NORAD/elements/gp.php?${query}&FORMAT=TLE`;
+    const celestrak = `https://celestrak.org/NORAD/elements/gp.php?${query}&FORMAT=TLE`;
     const cacheKey = 'sat-tracker:' + query;
 
+    // 1) Serve a fresh-enough cached copy if we have one.
     const cached = this._readCache(cacheKey);
     if (cached) {
       const picked = this._pickEntry(cached.entries, cfg.name);
       if (picked) return cfg.label ? { ...picked, name: cfg.label } : picked;
     }
-    const res = await fetch(url, { mode: 'cors' });
-    if (!res.ok) throw new Error('CelesTrak request failed (HTTP ' + res.status + ')');
-    const text = (await res.text()).trim();
-    if (!text || /no gp data/i.test(text)) {
+
+    // 2) Try, in order: a custom proxy, CelesTrak directly, then public CORS
+    //    proxies. CelesTrak does not send CORS headers, so a direct browser
+    //    request usually fails on a deployed site — the proxies make it work
+    //    with no backend of your own.
+    const candidates = [];
+    if (cfg.proxy) candidates.push(cfg.proxy + celestrak);
+    candidates.push(celestrak);
+    candidates.push('https://corsproxy.io/?url=' + encodeURIComponent(celestrak));
+    candidates.push('https://api.allorigins.win/raw?url=' + encodeURIComponent(celestrak));
+
+    let entries = null, lastErr = null;
+    for (const url of candidates) {
+      try {
+        const res = await fetch(url, { mode: 'cors' });
+        if (!res.ok) { lastErr = new Error('HTTP ' + res.status); continue; }
+        const text = (await res.text()).trim();
+        if (!text || /no gp data/i.test(text)) { lastErr = new Error('no catalog match'); continue; }
+        const parsed = this._parseTle(text);
+        if (parsed.length) { entries = parsed; break; }
+        lastErr = new Error('unparseable response');
+      } catch (err) { lastErr = err; }
+    }
+
+    if (entries) {
+      this._writeCache(cacheKey, { entries });
+      const picked = this._pickEntry(entries, cfg.name);
+      if (picked) return cfg.label ? { ...picked, name: cfg.label } : picked;
+    }
+
+    // 3) Last resort: reuse the last good elements regardless of age — a TLE
+    //    stays usable for days, so the widget keeps working through outages.
+    const stale = this._readCache(cacheKey, true);
+    if (stale) {
+      const picked = this._pickEntry(stale.entries, cfg.name);
+      if (picked) return cfg.label ? { ...picked, name: cfg.label } : picked;
+    }
+
+    if (lastErr && /match/i.test(lastErr.message)) {
       throw new Error(`No catalog match for "${cfg.noradId || cfg.name}". Check the name or NORAD id.`);
     }
-    const entries = this._parseTle(text);
-    if (!entries.length) throw new Error('Could not parse orbital data from CelesTrak.');
-    this._writeCache(cacheKey, { entries });
-    const picked = this._pickEntry(entries, cfg.name);
-    if (!picked) throw new Error('No matching satellite found in the response.');
-    return cfg.label ? { ...picked, name: cfg.label } : picked;
+    throw new Error('Could not load orbital data (network or CORS). See README for hosting the data on your own domain.');
   }
 
   _parseTle(text) {
@@ -270,12 +301,12 @@ class SatelliteTracker extends HTMLElement {
     return entries.find((e) => e.name.toLowerCase().includes(wanted)) || entries[0];
   }
 
-  _readCache(key) {
+  _readCache(key, ignoreAge = false) {
     try {
       const raw = localStorage.getItem(key);
       if (!raw) return null;
       const obj = JSON.parse(raw);
-      if (Date.now() - obj.t > TLE_CACHE_TTL_MS) return null;
+      if (!ignoreAge && Date.now() - obj.t > TLE_CACHE_TTL_MS) return null;
       return obj.v;
     } catch { return null; }
   }

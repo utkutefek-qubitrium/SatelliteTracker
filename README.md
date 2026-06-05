@@ -141,6 +141,29 @@ to stay accurate):
 - `topojson-client` + `world-atlas` — the world basemap (optional; the tracker
   still runs if the basemap fails to load)
 
+## Running it on a production site (data & CORS)
+
+CelesTrak does not send CORS headers, so a browser request straight from your
+domain to `celestrak.org` is usually blocked once deployed (it often still works
+from `localhost`). The widget handles this automatically with **no backend on
+your side**, trying in order:
+
+1. a custom `proxy` you provide (if set),
+2. CelesTrak directly (works if/when CORS is allowed),
+3. public CORS proxies (`corsproxy.io`, then `allorigins.win`),
+4. the last successfully cached elements (a TLE stays usable for days).
+
+That makes it "just work" on most sites. The public proxies are third-party and
+can rate-limit, so for a **bulletproof** setup serve the data from your own
+domain — any of these removes the dependency entirely:
+
+- **Serverless function / Worker** (Vercel, Netlify, Cloudflare): fetch CelesTrak
+  server-side and return it, then set `proxy="https://yourapp/api/tle?u="`.
+- **Scheduled cache:** a cron/GitHub Action saves the TLE to a static file on
+  your domain, and you pass it via `tle-line1` / `tle-line2`.
+
+> Tell me your host and I'll wire the exact version for you.
+
 ## A note on the coverage footprint
 
 On the **globe**, the footprint is the true geodesic coverage circle. On the
