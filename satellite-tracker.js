@@ -69,6 +69,22 @@ function loadScript(url) {
   return p;
 }
 
+// Inject the IBM Plex Mono + Inter web fonts once. Fonts loaded into the
+// document apply inside the shadow DOM too, so the widget keeps its typography
+// even when embedded on a site that doesn't ship these fonts.
+let fontsInjected = false;
+function ensureFonts() {
+  if (fontsInjected || document.getElementById('sat-tracker-fonts')) return;
+  fontsInjected = true;
+  const pre1 = Object.assign(document.createElement('link'), { rel: 'preconnect', href: 'https://fonts.googleapis.com' });
+  const pre2 = Object.assign(document.createElement('link'), { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossOrigin: 'anonymous' });
+  const css = Object.assign(document.createElement('link'), {
+    id: 'sat-tracker-fonts', rel: 'stylesheet',
+    href: 'https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Inter:wght@400;500;600;700&display=swap',
+  });
+  document.head.append(pre1, pre2, css);
+}
+
 // Fetch + decode the world land outline once, shared across instances.
 async function loadLand() {
   if (landPromise) return landPromise;
@@ -150,6 +166,7 @@ class SatelliteTracker extends HTMLElement {
   }
 
   connectedCallback() {
+    ensureFonts();
     this._view = (this.getAttribute('view') || 'globe').toLowerCase() === 'map' ? 'map' : 'globe';
     this._renderShell();
     this._restoreObserver();
@@ -761,7 +778,9 @@ class SatelliteTracker extends HTMLElement {
           --grid:rgba(140,180,230,.18); --accent:#38bdf8; --brand:#7c5cff; --track:#67e8f9;
           --foot:rgba(124,140,255,.95); --obs:#22e08a; --text:#eaf0fb; --muted:#9aa6bf;
           --panel:rgba(10,16,32,.74);
-          font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:var(--text);
+          --font-sans:'Inter',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+          --font-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+          font-family:var(--font-sans); color:var(--text);
         }
         .card { position:relative; background:var(--bg);
                 border:1px solid rgba(124,92,255,.28);
@@ -799,7 +818,8 @@ class SatelliteTracker extends HTMLElement {
         .operator { display:inline-block; font-size:10px; font-weight:800; letter-spacing:1.5px;
                     text-transform:uppercase; color:#c7b9ff; background:rgba(124,92,255,.16);
                     border:1px solid rgba(124,92,255,.5); border-radius:5px; padding:2px 7px; margin-bottom:6px; }
-        .panel h3 { margin:0 0 2px; font-size:15px; font-weight:750; }
+        .panel h3 { margin:0 0 2px; font-size:16px; font-weight:600; letter-spacing:.4px;
+                    font-family:var(--font-mono); }
         .norad { color:var(--muted); font-size:11px; margin-bottom:8px; }
         .grid { display:grid; grid-template-columns:auto auto; gap:2px 14px; }
         .grid .k { color:var(--muted); }
