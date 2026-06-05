@@ -10,6 +10,10 @@ a 2D world map. Built for tracking the payload aboard **D-Orbit's ION SCV
   with [satellite.js](https://github.com/shashwatak/satellite-js) (SGP4).
 - **Framework-agnostic** — a real custom element, so it works in plain HTML,
   React, Vue, Svelte, Angular, etc.
+- **Two views** — a flat **2D world map** and an interactive **3D globe**
+  (drag to rotate, double-click to re-follow the satellite), with a toggle.
+- **Pass predictor** — set your location (one click, or type lat/lon) to get
+  the next passes overhead: max elevation, local time, duration, and direction.
 - **Shows nicely** — subsatellite point, one-orbit ground track, coverage
   footprint, a day/night terminator, and a live telemetry readout.
 
@@ -26,8 +30,28 @@ a 2D world map. Built for tracking the payload aboard **D-Orbit's ION SCV
 
 Open `index.html` for a full demo page.
 
-> **Tip:** browsers don't allow `fetch()` from `file://` pages. Serve the folder
-> over HTTP, e.g. `python3 -m http.server` then open <http://localhost:8000>.
+## Run it locally on a Mac
+
+Browsers block `fetch()` (and geolocation) on `file://` pages, so don't just
+double-click `index.html` — serve the folder over HTTP. From this directory:
+
+```bash
+# Option A — Python (preinstalled on macOS)
+python3 -m http.server 8000
+# then open http://localhost:8000
+
+# Option B — Node (if you have it)
+npx serve .
+
+# Option C — VS Code: right-click index.html → "Open with Live Server"
+```
+
+Notes for the demo:
+- **Internet is required** — it fetches live orbital data and the basemap from CDNs.
+- **Geolocation** ("Use my location") works on `http://localhost` and on any
+  `https://` site, but is blocked on plain `http://` over a network and on
+  `file://`. You can always type a lat/lon and hit **Set** instead.
+- The **Globe**: drag to rotate, double-click to re-center on the satellite.
 
 ## Using it in a React app
 
@@ -53,10 +77,16 @@ export function PayloadMap() {
 | `tle-line1`       | —                      | Manual TLE line 1. With `tle-line2`, skips the network entirely.            |
 | `tle-line2`       | —                      | Manual TLE line 2.                                                          |
 | `label`           | name from TLE          | Display name shown in the UI.                                               |
+| `view`            | `map`                  | Initial view: `map` or `globe`.                                            |
 | `update-interval` | `1000`                 | Position refresh in milliseconds.                                           |
 | `show-footprint`  | `true`                 | Draw the ground coverage circle.                                            |
 | `show-track`      | `true`                 | Draw the ground track for one orbit.                                        |
 | `show-terminator` | `true`                 | Shade the night side of Earth.                                              |
+| `show-passes`     | `true`                 | Show the next-pass predictor panel.                                        |
+| `observer-lat`    | —                      | Preset observer latitude (deg) for pass prediction.                        |
+| `observer-lon`    | —                      | Preset observer longitude (deg) for pass prediction.                       |
+| `min-elevation`   | `10`                   | Minimum elevation (deg) counted as a visible pass.                         |
+| `pass-count`      | `3`                    | Number of upcoming passes to list.                                         |
 | `units`           | `metric`               | `metric` or `imperial`.                                                     |
 | `proxy`           | —                      | URL prefix prepended to the CelesTrak request (only if you hit CORS).       |
 

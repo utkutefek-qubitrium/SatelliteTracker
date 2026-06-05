@@ -32,6 +32,8 @@
     <p class="sub">
       Hosted aboard D-Orbit's <strong>ION SCV Astounding Alexandra</strong>.
       Position computed in your browser from public orbital elements, refreshed every second.
+      Switch between <strong>Map</strong> and <strong>Globe</strong>, and set your location
+      to see the next passes overhead.
     </p>
   </header>
 
@@ -39,9 +41,13 @@
     <satellite-tracker
       satellite-name="Astounding Alexandra"
       label="ION SCV Astounding Alexandra"
+      view="map"
       show-footprint="true"
       show-track="true"
-      show-terminator="true">
+      show-terminator="true"
+      show-passes="true"
+      min-elevation="10"
+      pass-count="3">
     </satellite-tracker>
   </main>
 
