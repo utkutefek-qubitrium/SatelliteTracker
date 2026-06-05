@@ -1,0 +1,109 @@
+# 🛰️ `<satellite-tracker>`
+
+A self-contained **Web Component** that shows the live location of a satellite on
+a 2D world map. Built for tracking the payload aboard **D-Orbit's ION SCV
+"Astounding Alexandra"**, but it works for any object in the public catalog.
+
+- **Drop-in** — one `<script>` and one custom element. No build step, no backend.
+- **Live** — fetches Two-Line Element (TLE) data from
+  [CelesTrak](https://celestrak.org/) and propagates the orbit in the browser
+  with [satellite.js](https://github.com/shashwatak/satellite-js) (SGP4).
+- **Framework-agnostic** — a real custom element, so it works in plain HTML,
+  React, Vue, Svelte, Angular, etc.
+- **Shows nicely** — subsatellite point, one-orbit ground track, coverage
+  footprint, a day/night terminator, and a live telemetry readout.
+
+## Quick start
+
+```html
+<script type="module" src="satellite-tracker.js"></script>
+
+<satellite-tracker
+  satellite-name="Astounding Alexandra"
+  label="ION SCV Astounding Alexandra">
+</satellite-tracker>
+```
+
+Open `index.html` for a full demo page.
+
+> **Tip:** browsers don't allow `fetch()` from `file://` pages. Serve the folder
+> over HTTP, e.g. `python3 -m http.server` then open <http://localhost:8000>.
+
+## Using it in a React app
+
+```jsx
+import 'satellite-tracker.js'; // registers the custom element once
+
+export function PayloadMap() {
+  return (
+    <satellite-tracker
+      satellite-name="Astounding Alexandra"
+      label="ION SCV Astounding Alexandra"
+    />
+  );
+}
+```
+
+## Attributes
+
+| Attribute         | Default                | Description                                                                 |
+| ----------------- | ---------------------- | --------------------------------------------------------------------------- |
+| `satellite-name`  | `Astounding Alexandra` | Name (substring) to look up on CelesTrak.                                    |
+| `norad-id`        | —                      | NORAD catalog number. Takes precedence over `satellite-name` when set.      |
+| `tle-line1`       | —                      | Manual TLE line 1. With `tle-line2`, skips the network entirely.            |
+| `tle-line2`       | —                      | Manual TLE line 2.                                                          |
+| `label`           | name from TLE          | Display name shown in the UI.                                               |
+| `update-interval` | `1000`                 | Position refresh in milliseconds.                                           |
+| `show-footprint`  | `true`                 | Draw the ground coverage circle.                                            |
+| `show-track`      | `true`                 | Draw the ground track for one orbit.                                        |
+| `show-terminator` | `true`                 | Shade the night side of Earth.                                              |
+| `units`           | `metric`               | `metric` or `imperial`.                                                     |
+| `proxy`           | —                      | URL prefix prepended to the CelesTrak request (only if you hit CORS).       |
+
+### Pinning to an exact object
+
+Looking up by name is convenient and survives catalog updates. If you'd rather
+pin to a specific object, set the NORAD id:
+
+```html
+<satellite-tracker norad-id="00000" label="ION SCV Astounding Alexandra"></satellite-tracker>
+```
+
+You can confirm the current NORAD id for the carrier on
+[CelesTrak's catalog search](https://celestrak.org/satcat/search.php) or
+[N2YO](https://www.n2yo.com/) — search for "Astounding Alexandra".
+
+### Fully offline (manual TLE)
+
+If you want zero external requests, paste a TLE directly (refresh it periodically
+to stay accurate):
+
+```html
+<satellite-tracker
+  label="ION SCV Astounding Alexandra"
+  tle-line1="1 NNNNNU YYNNNA   ..."
+  tle-line2="2 NNNNN  ...">
+</satellite-tracker>
+```
+
+## How it works
+
+1. On connect, it loads `satellite.js` and a low-res world basemap from a CDN.
+2. It fetches the TLE from CelesTrak (cached in `localStorage` for 2 hours) — or
+   uses your manual `tle-line1/2`.
+3. Every `update-interval`, it runs SGP4 to get the ECI position, converts to
+   geodetic lat/lon/altitude, and updates the map and readout.
+4. The ground track, footprint, and terminator are recomputed on a slower cadence.
+
+## Runtime dependencies (loaded from CDN)
+
+- `satellite.js` — SGP4 orbit propagation
+- `topojson-client` + `world-atlas` — the world basemap (optional; the tracker
+  still runs if the basemap fails to load)
+
+## Notes & limitations
+
+- TLE accuracy degrades over days; the readout shows the element-set age.
+- D-Orbit's ION carriers manoeuvre, so elements can change after burns — name
+  lookup picks up fresh elements automatically on the next 2-hour refresh.
+- Requires an internet connection at runtime unless you supply a manual TLE.

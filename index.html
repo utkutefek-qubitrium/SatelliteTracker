@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ION SCV Astounding Alexandra — Live Payload Tracker</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(140% 120% at 50% -10%, #15233f 0%, #060a14 60%);
+      color: #e2e8f0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 16px;
+      box-sizing: border-box;
+    }
+    header { text-align: center; margin-bottom: 22px; max-width: 720px; }
+    h1 { margin: 0 0 6px; font-size: clamp(20px, 4vw, 30px); }
+    p.sub { margin: 0; color: #94a3b8; font-size: 15px; }
+    main { width: 100%; max-width: 920px; }
+    satellite-tracker { display: block; }
+    footer { margin-top: 18px; color: #64748b; font-size: 12px; text-align: center; }
+    footer a { color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🛰️ Our Payload — Live Location</h1>
+    <p class="sub">
+      Hosted aboard D-Orbit's <strong>ION SCV Astounding Alexandra</strong>.
+      Position computed in your browser from public orbital elements, refreshed every second.
+    </p>
+  </header>
+
+  <main>
+    <satellite-tracker
+      satellite-name="Astounding Alexandra"
+      label="ION SCV Astounding Alexandra"
+      show-footprint="true"
+      show-track="true"
+      show-terminator="true">
+    </satellite-tracker>
+  </main>
+
+  <footer>
+    Orbital data courtesy of <a href="https://celestrak.org/" target="_blank" rel="noopener">CelesTrak</a>.
+    Propagation via <a href="https://github.com/shashwatak/satellite-js" target="_blank" rel="noopener">satellite.js</a>.
+  </footer>
+
+  <script type="module" src="satellite-tracker.js"></script>
+</body>
+</html>
