@@ -86,6 +86,7 @@ export function PayloadMap() {
 | `tle-line2`       | —                      | Manual TLE line 2.                                                          |
 | `label`           | name from TLE          | Display name shown in the UI (e.g. your payload `QUBITCORE`).               |
 | `operator`        | —                      | Operator name shown as a chip above the label (e.g. `Qubitrium`).          |
+| `logo`            | —                      | URL of an operator logo shown in the panel (hidden automatically if it fails to load). |
 | `view`            | `globe`                | Initial view: `globe` or `map`.                                           |
 | `update-interval` | `1000`                 | Position refresh in milliseconds.                                           |
 | `show-footprint`  | `true`                 | Draw the ground coverage circle.                                            |
@@ -139,6 +140,15 @@ to stay accurate):
 - `satellite.js` — SGP4 orbit propagation
 - `topojson-client` + `world-atlas` — the world basemap (optional; the tracker
   still runs if the basemap fails to load)
+
+## A note on the coverage footprint
+
+On the **globe**, the footprint is the true geodesic coverage circle. On the
+**flat map**, a real footprint projects to a distorted oval (a circle on a
+sphere can't stay a circle on an equirectangular map), so the widget instead
+draws a clean circular "range ring" sized to the coverage radius — it reads as
+an intentional ring rather than a warped blob. Switch to the globe for the
+geometrically exact footprint.
 
 ## Notes & limitations
 

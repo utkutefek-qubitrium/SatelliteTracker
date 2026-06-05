@@ -26,13 +26,14 @@
       padding: 36px 16px 56px;
     }
     .brandbar {
-      display: flex; align-items: center; gap: 10px; margin-bottom: 26px;
-      font-weight: 800; letter-spacing: 3px; font-size: 14px; text-transform: uppercase;
+      display: flex; align-items: center; gap: 12px; margin-bottom: 26px;
+      font-weight: 800; letter-spacing: 3px; font-size: 15px; text-transform: uppercase;
+      text-decoration: none;
     }
-    .brandbar .mark {
-      width: 26px; height: 26px; border-radius: 7px;
-      background: conic-gradient(from 210deg, var(--brand), var(--brand-2), var(--brand));
-      box-shadow: 0 0 18px rgba(124,92,255,.6);
+    .brandbar .qlogo {
+      height: 38px; width: 38px; object-fit: contain; border-radius: 9px;
+      background: rgba(124,92,255,.12); padding: 4px;
+      box-shadow: 0 0 22px rgba(124,92,255,.55);
     }
     .brandbar span { background: linear-gradient(90deg, #fff, #c7b9ff);
                      -webkit-background-clip: text; background-clip: text; color: transparent; }
@@ -51,7 +52,11 @@
   </style>
 </head>
 <body>
-  <div class="brandbar"><span class="mark"></span><span>Qubitrium</span></div>
+  <a class="brandbar" href="https://qubitrium.tech/" target="_blank" rel="noopener">
+    <img class="qlogo" src="https://qubitrium.tech/apple-touch-icon.png" alt="Qubitrium logo"
+         onerror="this.onerror=null; this.src='https://www.google.com/s2/favicons?domain=qubitrium.tech&amp;sz=128'">
+    <span>Qubitrium</span>
+  </a>
 
   <header>
     <p class="eyebrow">Live mission telemetry</p>
@@ -69,6 +74,7 @@
       satellite-name="Astounding Alexandra"
       label="QUBITCORE"
       operator="Qubitrium"
+      logo="https://www.google.com/s2/favicons?domain=qubitrium.tech&sz=128"
       view="globe"
       show-footprint="true"
       show-track="true"

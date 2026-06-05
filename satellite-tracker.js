@@ -407,7 +407,29 @@ class SatelliteTracker extends HTMLElement {
   _redrawGeo() {
     const e = this._els;
     e.track.setAttribute('d', this._trackLL.length ? this._pathFrom(this._trackLL) : '');
-    e.footprint.setAttribute('d', this._footLL.length ? this._pathFrom(this._footLL, true) : '');
+
+    // Footprint (coverage area).
+    //  - Globe: the true geodesic circle (already looks circular under orthographic).
+    //  - Map: a clean screen-space circle around the marker. A real footprint is an
+    //    oval on an equirectangular map; we draw a tidy circle sized to the coverage
+    //    radius so it reads as an intentional "range ring" rather than a distorted blob.
+    const hasFoot = this._footLL.length && this._satLL && this._satAlt != null;
+    if (this._view === 'globe' && hasFoot) {
+      e.footprint.setAttribute('d', this._pathFrom(this._footLL, true));
+      e.footring.style.display = 'none';
+    } else if (this._view === 'map' && hasFoot) {
+      const p = this._project(this._satLL[0], this._satLL[1]);
+      const footDeg = Math.acos(EARTH_RADIUS_KM / (EARTH_RADIUS_KM + this._satAlt)) / DEG;
+      const r = (footDeg / 180) * VB_H;
+      e.footring.setAttribute('cx', p.x.toFixed(1));
+      e.footring.setAttribute('cy', p.y.toFixed(1));
+      e.footring.setAttribute('r', r.toFixed(1));
+      e.footring.style.display = '';
+      e.footprint.setAttribute('d', '');
+    } else {
+      e.footprint.setAttribute('d', '');
+      e.footring.style.display = 'none';
+    }
 
     // terminator
     if (this._termLL) {
@@ -608,6 +630,7 @@ class SatelliteTracker extends HTMLElement {
     this._els.followBtn.hidden = view !== 'globe';
     this._els.oceanRect.style.display = view === 'map' ? '' : 'none';
     this._els.oceanDisc.style.display = view === 'globe' ? '' : 'none';
+    this._els.stars.style.display = view === 'globe' ? '' : 'none';
     this._els.scene.setAttribute('clip-path', view === 'globe' ? 'url(#discClip)' : 'none');
     this._els.svg.style.cursor = view === 'globe' ? 'grab' : 'default';
     this._drawBasemap();
@@ -703,35 +726,45 @@ class SatelliteTracker extends HTMLElement {
       <style>
         :host {
           display:block;
-          --bg:#070c18; --space:#05080f; --ocean:#0d1b2e; --land:#1f3a5f;
-          --grid:rgba(120,160,210,.14); --accent:#38bdf8; --track:#f59e0b;
-          --foot:rgba(56,189,248,.9); --obs:#22c55e; --text:#e2e8f0; --muted:#94a3b8;
-          --panel:rgba(8,14,28,.72);
+          --bg:#070c18; --space:#04060d; --ocean:#0d1b2e; --land:#27507a;
+          --grid:rgba(140,180,230,.18); --accent:#38bdf8; --brand:#7c5cff; --track:#67e8f9;
+          --foot:rgba(124,140,255,.95); --obs:#22e08a; --text:#eaf0fb; --muted:#9aa6bf;
+          --panel:rgba(10,16,32,.74);
           font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; color:var(--text);
         }
-        .card { position:relative; background:var(--bg); border:1px solid rgba(148,163,184,.18);
-                border-radius:14px; overflow:hidden; box-shadow:0 10px 40px rgba(0,0,0,.35); }
+        .card { position:relative; background:var(--bg);
+                border:1px solid rgba(124,92,255,.28);
+                border-radius:16px; overflow:hidden;
+                box-shadow:0 14px 50px rgba(0,0,0,.45), 0 0 0 1px rgba(56,189,248,.06) inset; }
         .mapwrap { position:relative; width:100%; aspect-ratio:2/1; touch-action:none; }
         svg { display:block; width:100%; height:100%;
-              background:radial-gradient(120% 120% at 50% 30%, #0a1322 0%, var(--space) 80%); }
+              background:radial-gradient(130% 130% at 50% 28%, #0c1730 0%, var(--space) 78%); }
         .ocean-rect { fill:url(#oceanGrad); }
-        .ocean-disc { filter:drop-shadow(0 0 26px rgba(56,189,248,.25)); }
+        .ocean-disc { filter:drop-shadow(0 0 34px rgba(56,189,248,.35)); }
         .graticule { fill:none; stroke:var(--grid); stroke-width:1; }
-        .land { fill:var(--land); stroke:rgba(120,170,230,.35); stroke-width:.6; }
-        .night.fill { fill:rgba(2,6,18,.5); stroke:none; }
-        .night.line { fill:none; stroke:rgba(255,210,120,.55); stroke-width:1.5; stroke-dasharray:2 4; }
-        .track { fill:none; stroke:var(--track); stroke-width:2; stroke-dasharray:5 5; opacity:.85; }
-        .footprint { fill:rgba(56,189,248,.10); stroke:var(--foot); stroke-width:1.5; }
-        .sat .glow { fill:var(--accent); opacity:.25; }
-        .sat .core { fill:#fff; stroke:var(--accent); stroke-width:2.5; }
-        .sat .ping { fill:none; stroke:var(--accent); stroke-width:2; animation:ping 2.2s ease-out infinite; }
-        @keyframes ping { 0%{r:6;opacity:.9} 100%{r:26;opacity:0} }
+        .land { fill:url(#landGrad); stroke:rgba(120,200,255,.55); stroke-width:.7;
+                paint-order:stroke; }
+        .night.fill { fill:rgba(2,5,16,.55); stroke:none; }
+        .night.line { fill:none; stroke:rgba(255,214,130,.6); stroke-width:1.6; stroke-dasharray:2 4; }
+        .track { fill:none; stroke:url(#trackGrad); stroke-width:2.6; stroke-linecap:round;
+                 stroke-dasharray:1 9; opacity:.95; animation:flow 1.1s linear infinite; }
+        @keyframes flow { to { stroke-dashoffset:-10; } }
+        .footprint { fill:url(#footGrad); stroke:var(--foot); stroke-width:1.8;
+                     stroke-dasharray:7 5; filter:drop-shadow(0 0 6px rgba(124,92,255,.6)); }
+        .sat .glow { fill:var(--accent); opacity:.22; }
+        .sat .halo { fill:none; stroke:var(--brand); stroke-width:2; opacity:.85; }
+        .sat .core { fill:#fff; stroke:var(--accent); stroke-width:3; }
+        .sat .ping { fill:none; stroke:var(--accent); stroke-width:2; animation:ping 2.4s ease-out infinite; }
+        .sat .ping2 { animation-delay:1.2s; stroke:var(--brand); }
+        @keyframes ping { 0%{r:7;opacity:.9} 100%{r:30;opacity:0} }
         .obs .pin { fill:var(--obs); stroke:#06210f; stroke-width:1.5; }
         .obs .ring { fill:none; stroke:var(--obs); stroke-width:1.5; opacity:.6; }
 
         .panel { position:absolute; top:12px; left:12px; background:var(--panel);
                  backdrop-filter:blur(6px); border:1px solid rgba(148,163,184,.2);
                  border-radius:10px; padding:10px 12px; min-width:178px; font-size:13px; line-height:1.35; }
+        .brandlogo { height:22px; width:auto; max-width:120px; display:block; margin-bottom:7px;
+                     filter:drop-shadow(0 0 6px rgba(124,92,255,.5)); }
         .operator { display:inline-block; font-size:10px; font-weight:800; letter-spacing:1.5px;
                     text-transform:uppercase; color:#c7b9ff; background:rgba(124,92,255,.16);
                     border:1px solid rgba(124,92,255,.5); border-radius:5px; padding:2px 7px; margin-bottom:6px; }
@@ -801,23 +834,46 @@ class SatelliteTracker extends HTMLElement {
                 <stop offset="100%" stop-color="#081320"/>
               </radialGradient>
               <clipPath id="discClip"><circle cx="${GLOBE_CX}" cy="${GLOBE_CY}" r="${GLOBE_R}"/></clipPath>
+              <linearGradient id="landGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#2b557f"/><stop offset="100%" stop-color="#1a3556"/>
+              </linearGradient>
+              <linearGradient id="trackGrad" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stop-color="#7c5cff"/><stop offset="100%" stop-color="#38bdf8"/>
+              </linearGradient>
+              <radialGradient id="footGrad" cx="50%" cy="50%" r="50%">
+                <stop offset="0%" stop-color="rgba(124,92,255,0)"/>
+                <stop offset="75%" stop-color="rgba(56,189,248,.05)"/>
+                <stop offset="100%" stop-color="rgba(56,189,248,.18)"/>
+              </radialGradient>
+              <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+                <feGaussianBlur stdDeviation="3.2" result="b"/>
+                <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+              <filter id="softglow" x="-80%" y="-80%" width="260%" height="260%">
+                <feGaussianBlur stdDeviation="6" result="b"/>
+                <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
             </defs>
             <rect class="ocean-rect" id="oceanRect" x="0" y="0" width="${VB_W}" height="${VB_H}"></rect>
+            <g id="stars" style="display:none"></g>
             <circle class="ocean-disc" id="oceanDisc" cx="${GLOBE_CX}" cy="${GLOBE_CY}" r="${GLOBE_R}"
                     fill="url(#discGrad)" style="display:none"></circle>
             <g id="scene" clip-path="none">
               <g id="map"></g>
               <path id="night" class="night fill"></path>
-              <path id="track" class="track"></path>
+              <circle id="footring" class="footprint" style="display:none"></circle>
               <path id="footprint" class="footprint"></path>
+              <path id="track" class="track" filter="url(#glow)"></path>
               <g id="observer" class="obs" style="visibility:hidden">
-                <circle class="ring" r="9"></circle>
-                <circle class="pin" r="4"></circle>
+                <circle class="ring" r="10"></circle>
+                <circle class="pin" r="4.5"></circle>
               </g>
-              <g id="sat" class="sat">
+              <g id="sat" class="sat" filter="url(#glow)">
+                <circle class="ping ping2" r="6"></circle>
                 <circle class="ping" r="6"></circle>
-                <circle class="glow" r="10"></circle>
-                <circle class="core" r="4"></circle>
+                <circle class="glow" r="13"></circle>
+                <circle class="halo" r="7"></circle>
+                <circle class="core" r="4.5"></circle>
               </g>
             </g>
           </svg>
@@ -876,8 +932,8 @@ class SatelliteTracker extends HTMLElement {
     const $ = (id) => root.getElementById(id);
     this._els = {
       svg: $('svg'), scene: $('scene'), map: $('map'), night: $('night'), track: $('track'),
-      footprint: $('footprint'), sat: $('sat'), observer: $('observer'),
-      oceanRect: $('oceanRect'), oceanDisc: $('oceanDisc'),
+      footprint: $('footprint'), footring: $('footring'), sat: $('sat'), observer: $('observer'),
+      oceanRect: $('oceanRect'), oceanDisc: $('oceanDisc'), stars: $('stars'),
       operator: $('operator'), name: $('name'), norad: $('norad'), lat: $('lat'), lon: $('lon'), alt: $('alt'),
       spd: $('spd'), period: $('period'), incl: $('incl'),
       status: $('status'), statusText: $('statusText'), epoch: $('epoch'), updated: $('updated'),
@@ -903,6 +959,19 @@ class SatelliteTracker extends HTMLElement {
     svg.addEventListener('pointercancel', (e) => this._onPointerUp(e));
     svg.addEventListener('dblclick', () => { if (this._view === 'globe') this._setFollow(true); });
 
+    // optional operator logo (from the host site)
+    const logo = this.getAttribute('logo');
+    if (logo) {
+      const img = document.createElement('img');
+      img.className = 'brandlogo';
+      img.src = logo;
+      img.alt = (this.getAttribute('operator') || '') + ' logo';
+      img.onerror = () => img.remove();
+      this._els.operator.parentElement.insertBefore(img, this._els.operator);
+    }
+
+    this._drawStars();
+
     // apply initial view
     if (this._view === 'globe') {
       this._els.toggle.querySelector('[data-view="globe"]').classList.add('active');
@@ -910,12 +979,28 @@ class SatelliteTracker extends HTMLElement {
       this._els.followBtn.hidden = false;
       this._els.oceanRect.style.display = 'none';
       this._els.oceanDisc.style.display = '';
+      this._els.stars.style.display = '';
       this._els.scene.setAttribute('clip-path', 'url(#discClip)');
       svg.style.cursor = 'grab';
     }
     // Draw an immediate basemap (graticule globe / map) so the view is visible
     // and interactive even before orbital data finishes loading.
     this._drawBasemap();
+  }
+
+  // A faint, static starfield shown around the globe (space backdrop).
+  _drawStars() {
+    let s = '';
+    let seed = 1337;
+    const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+    for (let i = 0; i < 90; i++) {
+      const x = (rnd() * VB_W).toFixed(1);
+      const y = (rnd() * VB_H).toFixed(1);
+      const r = (0.4 + rnd() * 1.2).toFixed(2);
+      const o = (0.25 + rnd() * 0.6).toFixed(2);
+      s += `<circle cx="${x}" cy="${y}" r="${r}" fill="#cdd9ff" opacity="${o}"/>`;
+    }
+    this._els.stars.innerHTML = s;
   }
 }
 
