@@ -35,7 +35,7 @@
 
 const SATELLITE_JS = 'https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/dist/satellite.min.js';
 const TOPOJSON_JS = 'https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js';
-const D3_GEO_JS = 'https://cdn.jsdelivr.net/npm/d3-geo@3.1.1/dist/d3-geo.min.js';
+const D3_GEO_ESM = 'https://cdn.jsdelivr.net/npm/d3-geo@3/+esm';
 const LAND_TOPOJSON = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/land-110m.json';
 
 const EARTH_RADIUS_KM = 6371;
@@ -68,6 +68,15 @@ function loadScript(url) {
   });
   scriptPromises.set(url, p);
   return p;
+}
+
+// Load d3-geo as an ES module (not a global UMD script). Dynamic import avoids
+// clashing with any existing `d3` global on the host page and bundles d3-geo's
+// own dependencies, so `geoOrthographic` & co. are always present.
+let d3Promise = null;
+function loadD3() {
+  if (!d3Promise) d3Promise = import(/* @vite-ignore */ D3_GEO_ESM);
+  return d3Promise;
 }
 
 // Inject the IBM Plex Mono + Inter web fonts once. Fonts loaded into the
@@ -213,7 +222,8 @@ class SatelliteTracker extends HTMLElement {
     const cfg = this.config;
     try {
       this._setStatus('loading', 'Loading orbital data…');
-      const [land] = await Promise.all([loadLand(), loadScript(SATELLITE_JS), loadScript(D3_GEO_JS)]);
+      const [land, , d3lib] = await Promise.all([loadLand(), loadScript(SATELLITE_JS), loadD3()]);
+      this._d3 = d3lib;
       this._land = land;
       this._makeProjection();
       this._drawBasemap();
@@ -345,18 +355,19 @@ class SatelliteTracker extends HTMLElement {
   // render correctly on both the equirectangular map and the orthographic globe
   // (no disappearing or overlapping continents at the limb).
   _makeProjection() {
+    if (!this._d3) return;
     if (this._view === 'globe') {
       // eslint-disable-next-line no-undef
-      this._proj = d3.geoOrthographic()
+      this._proj = this._d3.geoOrthographic()
         .scale(GLOBE_R).translate([GLOBE_CX, GLOBE_CY]).clipAngle(90)
         .rotate([-this._globeLon, -this._globeLat]);
     } else {
       // eslint-disable-next-line no-undef
-      this._proj = d3.geoEquirectangular()
+      this._proj = this._d3.geoEquirectangular()
         .scale(VB_W / (2 * Math.PI)).translate([VB_W / 2, VB_H / 2]);
     }
     // eslint-disable-next-line no-undef
-    this._path = d3.geoPath(this._proj);
+    this._path = this._d3.geoPath(this._proj);
   }
 
   // Keep the orthographic rotation in sync with the current globe orientation.
@@ -370,7 +381,7 @@ class SatelliteTracker extends HTMLElement {
     let v = true;
     if (this._view === 'globe') {
       // eslint-disable-next-line no-undef
-      v = d3.geoDistance([lon, lat], [this._globeLon, this._globeLat]) < Math.PI / 2;
+      v = this._d3.geoDistance([lon, lat], [this._globeLon, this._globeLat]) < Math.PI / 2;
     }
     return { x: xy[0], y: xy[1], v };
   }
@@ -457,7 +468,7 @@ class SatelliteTracker extends HTMLElement {
     const footDeg = hasFoot ? Math.acos(EARTH_RADIUS_KM / (EARTH_RADIUS_KM + this._satAlt)) / DEG : 0;
     if (hasFoot && this._view === 'globe') {
       // eslint-disable-next-line no-undef
-      const circle = d3.geoCircle().center([this._satLL[1], this._satLL[0]]).radius(footDeg)();
+      const circle = this._d3.geoCircle().center([this._satLL[1], this._satLL[0]]).radius(footDeg)();
       e.footprint.setAttribute('d', this._path(circle) || '');
       e.footring.style.display = 'none';
     } else if (hasFoot && this._view === 'map') {
@@ -477,7 +488,7 @@ class SatelliteTracker extends HTMLElement {
     // the antisolar point — clipped correctly on both views by d3.
     if (cfg.terminator && this._termLL) {
       // eslint-disable-next-line no-undef
-      const night = d3.geoCircle().center([this._termLL.lon + 180, -this._termLL.lat]).radius(90)();
+      const night = this._d3.geoCircle().center([this._termLL.lon + 180, -this._termLL.lat]).radius(90)();
       e.night.setAttribute('d', this._path(night) || '');
     } else {
       e.night.setAttribute('d', '');
@@ -717,7 +728,7 @@ class SatelliteTracker extends HTMLElement {
     this._sync();
     const g = this._els.map;
     // eslint-disable-next-line no-undef
-    const grat = this._path(d3.geoGraticule10()) || '';
+    const grat = this._path(this._d3.geoGraticule10()) || '';
     const land = this._land ? (this._path(this._land) || '') : '';
     g.innerHTML =
       `<path class="graticule" d="${grat}"></path>` +
