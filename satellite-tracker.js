@@ -635,7 +635,7 @@ class SatelliteTracker extends HTMLElement {
 
   _renderPasses() {
     const list = this._els.passList;
-    if (!this._observer) { list.innerHTML = '<div class="hint">Set your location to see upcoming passes.</div>'; return; }
+    if (!this._observer) { list.innerHTML = '<div class="hint">Enter your latitude and longitude to see upcoming passes.</div>'; return; }
     if (!this._passes.length) { list.innerHTML = '<div class="hint">No passes above the horizon in the next 48 h.</div>'; return; }
     const now = Date.now();
     list.innerHTML = this._passes.map((p) => {
@@ -657,16 +657,6 @@ class SatelliteTracker extends HTMLElement {
     return sameDay
       ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       : date.toLocaleString([], opts);
-  }
-
-  _requestGeolocation() {
-    if (!navigator.geolocation) { this._els.locLabel.textContent = 'Geolocation unavailable'; return; }
-    this._els.locLabel.textContent = 'Locating…';
-    navigator.geolocation.getCurrentPosition(
-      (pos) => this._setObserver(pos.coords.latitude, pos.coords.longitude, 'Your location'),
-      (err) => { this._els.locLabel.textContent = 'Location denied — enter manually'; console.warn(err); },
-      { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 }
-    );
   }
 
   // ---- view switching + globe interaction ------------------------------------
@@ -760,10 +750,16 @@ class SatelliteTracker extends HTMLElement {
       for (let lon = -180; lon <= 180; lon += 4) line.push([lat, lon]);
       grat.push(this._pathFrom(line));
     }
-    const land = this._landRings.map((r) => this._pathFrom(r, true)).join('');
-    g.innerHTML =
-      `<path class="graticule" d="${grat.join('')}"></path>` +
-      (land ? `<path class="land" d="${land}"></path>` : '');
+    // Each landmass is its own <path>. On the globe, hemisphere clipping turns
+    // rings into arcs; concatenating them into one path makes their fill winding
+    // interact and cancel out at some rotations (continents vanish). Separate
+    // paths keep every landmass filled independently.
+    const land = this._landRings
+      .map((r) => this._pathFrom(r, true))
+      .filter(Boolean)
+      .map((d) => `<path class="land" d="${d}"></path>`)
+      .join('');
+    g.innerHTML = `<path class="graticule" d="${grat.join('')}"></path>` + land;
   }
 
   // ---- DOM scaffolding -------------------------------------------------------
@@ -792,7 +788,7 @@ class SatelliteTracker extends HTMLElement {
         .ocean-rect { fill:url(#oceanGrad); }
         .ocean-disc { filter:drop-shadow(0 0 34px rgba(56,189,248,.35)); }
         .graticule { fill:none; stroke:var(--grid); stroke-width:1; }
-        .land { fill:url(#landGrad); stroke:rgba(120,200,255,.55); stroke-width:.7;
+        .land { fill:url(#landGrad); stroke:#bfeaff; stroke-width:1.1; stroke-linejoin:round;
                 paint-order:stroke; }
         .night.fill { fill:rgba(2,5,16,.55); stroke:none; }
         .night.line { fill:none; stroke:rgba(255,214,130,.6); stroke-width:1.6; stroke-dasharray:2 4; }
@@ -801,12 +797,13 @@ class SatelliteTracker extends HTMLElement {
         @keyframes flow { to { stroke-dashoffset:-10; } }
         .footprint { fill:url(#footGrad); stroke:var(--foot); stroke-width:1.8;
                      stroke-dasharray:7 5; filter:drop-shadow(0 0 6px rgba(124,92,255,.6)); }
-        .sat .glow { fill:var(--accent); opacity:.22; }
-        .sat .halo { fill:none; stroke:var(--brand); stroke-width:2; opacity:.85; }
-        .sat .core { fill:#fff; stroke:var(--accent); stroke-width:3; }
-        .sat .ping { fill:none; stroke:var(--accent); stroke-width:2; animation:ping 2.4s ease-out infinite; }
+        .sat .glow { fill:var(--accent); opacity:.32; }
+        .sat .halo { fill:none; stroke:var(--brand); stroke-width:2.5; opacity:.9; }
+        .sat .edge { fill:#06203a; stroke:none; }
+        .sat .core { fill:#eaffff; stroke:var(--accent); stroke-width:3.5; }
+        .sat .ping { fill:none; stroke:var(--accent); stroke-width:2.4; animation:ping 2.4s ease-out infinite; }
         .sat .ping2 { animation-delay:1.2s; stroke:var(--brand); }
-        @keyframes ping { 0%{r:7;opacity:.9} 100%{r:30;opacity:0} }
+        @keyframes ping { 0%{r:9;opacity:.95} 100%{r:34;opacity:0} }
         .obs .pin { fill:var(--obs); stroke:#06210f; stroke-width:1.5; }
         .obs .ring { fill:none; stroke:var(--obs); stroke-width:1.5; opacity:.6; }
 
@@ -844,8 +841,6 @@ class SatelliteTracker extends HTMLElement {
         .passhead { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px; }
         .passhead .title { font-weight:650; font-size:13px; }
         .passhead .spacer { flex:1; }
-        .locBtn { background:var(--accent); color:#04223a; border:0; border-radius:7px; padding:5px 10px;
-                  font-size:12px; font-weight:650; cursor:pointer; }
         .loc-inputs { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); flex-wrap:wrap; margin-bottom:8px; }
         .loc-inputs input { width:84px; background:#0b1424; border:1px solid rgba(148,163,184,.25);
                             color:var(--text); border-radius:6px; padding:4px 6px; font-size:12px; }
@@ -886,7 +881,7 @@ class SatelliteTracker extends HTMLElement {
               </radialGradient>
               <clipPath id="discClip"><circle cx="${GLOBE_CX}" cy="${GLOBE_CY}" r="${GLOBE_R}"/></clipPath>
               <linearGradient id="landGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#2b557f"/><stop offset="100%" stop-color="#1a3556"/>
+                <stop offset="0%" stop-color="#4f86c6"/><stop offset="100%" stop-color="#356aa3"/>
               </linearGradient>
               <linearGradient id="trackGrad" x1="0" y1="0" x2="1" y2="0">
                 <stop offset="0%" stop-color="#7c5cff"/><stop offset="100%" stop-color="#38bdf8"/>
@@ -920,11 +915,12 @@ class SatelliteTracker extends HTMLElement {
                 <circle class="pin" r="4.5"></circle>
               </g>
               <g id="sat" class="sat" filter="url(#glow)">
-                <circle class="ping ping2" r="6"></circle>
-                <circle class="ping" r="6"></circle>
-                <circle class="glow" r="13"></circle>
-                <circle class="halo" r="7"></circle>
-                <circle class="core" r="4.5"></circle>
+                <circle class="ping ping2" r="8"></circle>
+                <circle class="ping" r="8"></circle>
+                <circle class="glow" r="18"></circle>
+                <circle class="halo" r="11"></circle>
+                <circle class="edge" r="8"></circle>
+                <circle class="core" r="5.5"></circle>
               </g>
             </g>
           </svg>
@@ -960,8 +956,6 @@ class SatelliteTracker extends HTMLElement {
         <div class="passes" id="passes" ${cfg.passes ? '' : 'style="display:none"'}>
           <div class="passhead">
             <span class="title">Next passes over your location</span>
-            <span class="spacer"></span>
-            <button class="locBtn" id="locBtn">📍 Use my location</button>
           </div>
           <div class="loc-inputs">
             <label>Lat <input id="latIn" type="number" step="0.0001" placeholder="0.0"></label>
@@ -970,7 +964,7 @@ class SatelliteTracker extends HTMLElement {
             <span class="locLabel" id="locLabel"></span>
           </div>
           <div class="passlist" id="passList">
-            <div class="hint">Set your location to see upcoming passes.</div>
+            <div class="hint">Enter your latitude and longitude to see upcoming passes.</div>
           </div>
         </div>
 
@@ -997,7 +991,6 @@ class SatelliteTracker extends HTMLElement {
     this._els.toggle.querySelectorAll('button[data-view]').forEach((b) =>
       b.addEventListener('click', () => this._setView(b.dataset.view)));
     this._els.followBtn.addEventListener('click', () => this._setFollow(!this._follow));
-    $('locBtn').addEventListener('click', () => this._requestGeolocation());
     $('setLoc').addEventListener('click', () => {
       const la = parseFloat(this._els.latIn.value), lo = parseFloat(this._els.lonIn.value);
       if (Number.isFinite(la) && Number.isFinite(lo)) this._setObserver(la, lo, 'Manual location');

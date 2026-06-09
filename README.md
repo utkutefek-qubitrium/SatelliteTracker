@@ -12,8 +12,8 @@ a 2D world map. Built for tracking the payload aboard **D-Orbit's ION SCV
   React, Vue, Svelte, Angular, etc.
 - **Two views** — a flat **2D world map** and an interactive **3D globe**
   (drag to rotate, double-click to re-follow the satellite), with a toggle.
-- **Pass predictor** — set your location (one click, or type lat/lon) to get
-  the next passes overhead: max elevation, local time, duration, and direction.
+- **Pass predictor** — enter a latitude/longitude to get the next passes
+  overhead: max elevation, local time, duration, and direction.
 - **Shows nicely** — subsatellite point, one-orbit ground track, coverage
   footprint, a day/night terminator, and a live telemetry readout.
 
@@ -39,8 +39,8 @@ Open `index.html` for a full demo page.
 
 ## Run it locally on a Mac
 
-Browsers block `fetch()` (and geolocation) on `file://` pages, so don't just
-double-click `index.html` — serve the folder over HTTP. From this directory:
+Browsers block `fetch()` on `file://` pages, so don't just double-click
+`index.html` — serve the folder over HTTP. From this directory:
 
 ```bash
 # Option A — Python (preinstalled on macOS)
@@ -55,9 +55,7 @@ npx serve .
 
 Notes for the demo:
 - **Internet is required** — it fetches live orbital data and the basemap from CDNs.
-- **Geolocation** ("Use my location") works on `http://localhost` and on any
-  `https://` site, but is blocked on plain `http://` over a network and on
-  `file://`. You can always type a lat/lon and hit **Set** instead.
+- **Passes:** type a latitude/longitude and hit **Set** to see upcoming passes.
 - The **Globe**: drag to rotate, double-click to re-center on the satellite.
 
 ## Using it in a React app
