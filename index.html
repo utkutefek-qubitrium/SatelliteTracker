@@ -9,10 +9,12 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --brand: #7c5cff;     /* Qubitrium violet */
-      --brand-2: #38bdf8;   /* cyan accent */
-      --ink: #e7eaf3;
-      --muted: #9aa3b8;
+      --brand: #2E3192;       /* Qubitrium indigo (logo) */
+      --brand-light: #8e93f0; /* light tint for text on dark bg */
+      --brand-mid: #5a5fd6;
+      --accent: #2dd4ff;      /* cyan accent */
+      --ink: #eef0ff;
+      --muted: #a6abd6;
       --font-sans: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
       --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
     }
@@ -21,8 +23,8 @@
       margin: 0;
       min-height: 100vh;
       background:
-        radial-gradient(1100px 600px at 50% -8%, rgba(124,92,255,.18) 0%, transparent 60%),
-        radial-gradient(140% 120% at 50% 0%, #131a2e 0%, #05070e 60%);
+        radial-gradient(1100px 600px at 50% -10%, rgba(46,49,146,.55) 0%, transparent 62%),
+        radial-gradient(150% 120% at 50% 0%, #11133c 0%, #07081c 60%);
       color: var(--ink);
       font-family: var(--font-sans);
       display: flex;
@@ -31,11 +33,11 @@
       padding: 36px 16px 56px;
     }
     header { text-align: center; margin-bottom: 24px; max-width: 760px; }
-    .eyebrow { color: var(--brand); font-weight: 700; letter-spacing: 2px;
+    .eyebrow { color: var(--brand-light); font-weight: 700; letter-spacing: 2.5px;
                text-transform: uppercase; font-size: 12px; margin: 0 0 8px; }
     h1 { margin: 0 0 10px; font-family: var(--font-mono); font-weight: 600; letter-spacing: 1px;
          font-size: clamp(28px, 6vw, 52px); line-height: 1.05;
-         background: linear-gradient(90deg, #ffffff 0%, #b9c7ff 60%, #38bdf8 100%);
+         background: linear-gradient(90deg, #ffffff 0%, #b9bcff 55%, #5a5fd6 100%);
          -webkit-background-clip: text; background-clip: text; color: transparent; }
     p.sub { margin: 0 auto; color: var(--muted); font-size: 16px; max-width: 620px; line-height: 1.5; }
     p.sub strong { color: var(--ink); }

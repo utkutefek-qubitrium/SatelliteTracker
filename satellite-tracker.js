@@ -35,6 +35,7 @@
 
 const SATELLITE_JS = 'https://cdn.jsdelivr.net/npm/satellite.js@5.0.0/dist/satellite.min.js';
 const TOPOJSON_JS = 'https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js';
+const D3_GEO_JS = 'https://cdn.jsdelivr.net/npm/d3-geo@3.1.1/dist/d3-geo.min.js';
 const LAND_TOPOJSON = 'https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/land-110m.json';
 
 const EARTH_RADIUS_KM = 6371;
@@ -146,7 +147,9 @@ class SatelliteTracker extends HTMLElement {
     this._tleName = '';
     this._noradId = '';
     this._view = 'map';
-    this._landRings = [];
+    this._land = null;        // GeoJSON land feature (lon,lat)
+    this._proj = null;        // d3 projection for the current view
+    this._path = null;        // d3 geoPath generator
     // globe orientation + interaction state
     this._globeLon = 0;
     this._globeLat = 20;
@@ -156,7 +159,6 @@ class SatelliteTracker extends HTMLElement {
     // cached geometry (geographic), re-projected on demand
     this._satLL = null;
     this._trackLL = [];
-    this._footLL = [];
     this._termLL = null;
     this._observer = null;
     this._passes = [];
@@ -211,8 +213,9 @@ class SatelliteTracker extends HTMLElement {
     const cfg = this.config;
     try {
       this._setStatus('loading', 'Loading orbital data…');
-      const [land] = await Promise.all([loadLand(), loadScript(SATELLITE_JS)]);
-      this._buildLandRings(land);
+      const [land] = await Promise.all([loadLand(), loadScript(SATELLITE_JS), loadScript(D3_GEO_JS)]);
+      this._land = land;
+      this._makeProjection();
       this._drawBasemap();
 
       const { name, l1, l2, noradId } = await this._resolveTle(cfg);
@@ -337,38 +340,44 @@ class SatelliteTracker extends HTMLElement {
     return new Date((jd - 2440587.5) * 86400000);
   }
 
-  // ---- projection ------------------------------------------------------------
-  // Returns { x, y, v } where v is visibility (always true for the map).
-  _project(lat, lon) {
+  // ---- projection (d3-geo) ---------------------------------------------------
+  // d3-geo does proper spherical clipping, so land/graticule/track/footprint
+  // render correctly on both the equirectangular map and the orthographic globe
+  // (no disappearing or overlapping continents at the limb).
+  _makeProjection() {
     if (this._view === 'globe') {
-      const phi = lat * DEG, lam = lon * DEG;
-      const phi0 = this._globeLat * DEG, lam0 = this._globeLon * DEG;
-      const cosc =
-        Math.sin(phi0) * Math.sin(phi) +
-        Math.cos(phi0) * Math.cos(phi) * Math.cos(lam - lam0);
-      const x = GLOBE_R * Math.cos(phi) * Math.sin(lam - lam0);
-      const y = GLOBE_R * (Math.cos(phi0) * Math.sin(phi) - Math.sin(phi0) * Math.cos(phi) * Math.cos(lam - lam0));
-      return { x: GLOBE_CX + x, y: GLOBE_CY - y, v: cosc >= 0 };
+      // eslint-disable-next-line no-undef
+      this._proj = d3.geoOrthographic()
+        .scale(GLOBE_R).translate([GLOBE_CX, GLOBE_CY]).clipAngle(90)
+        .rotate([-this._globeLon, -this._globeLat]);
+    } else {
+      // eslint-disable-next-line no-undef
+      this._proj = d3.geoEquirectangular()
+        .scale(VB_W / (2 * Math.PI)).translate([VB_W / 2, VB_H / 2]);
     }
-    return { x: ((lon + 180) / 360) * VB_W, y: ((90 - lat) / 180) * VB_H, v: true };
+    // eslint-disable-next-line no-undef
+    this._path = d3.geoPath(this._proj);
   }
 
-  // Build an SVG path from [lat,lon] points, breaking at hidden points (globe)
-  // or antimeridian crossings (map).
-  _pathFrom(points, close = false) {
-    let d = '', prev = null;
-    const maxJump = this._view === 'map' ? VB_W / 2 : Infinity;
-    for (const [la, lo] of points) {
-      const p = this._project(la, lo);
-      if (!p.v) { prev = null; continue; }
-      if (prev === null || Math.abs(p.x - prev.x) > maxJump) {
-        d += `M${p.x.toFixed(1)},${p.y.toFixed(1)}`;
-      } else {
-        d += `L${p.x.toFixed(1)},${p.y.toFixed(1)}`;
-      }
-      prev = p;
+  // Keep the orthographic rotation in sync with the current globe orientation.
+  _sync() {
+    if (this._view === 'globe' && this._proj) this._proj.rotate([-this._globeLon, -this._globeLat]);
+  }
+
+  // Project a single [lat,lon] to screen { x, y, v(isible) }.
+  _projectPoint(lat, lon) {
+    const xy = this._proj([lon, lat]) || [0, 0];
+    let v = true;
+    if (this._view === 'globe') {
+      // eslint-disable-next-line no-undef
+      v = d3.geoDistance([lon, lat], [this._globeLon, this._globeLat]) < Math.PI / 2;
     }
-    return close ? d + 'Z' : d;
+    return { x: xy[0], y: xy[1], v };
+  }
+
+  // SVG path for a polyline given as [lat,lon] points.
+  _line(latlon) {
+    return this._path({ type: 'LineString', coordinates: latlon.map(([la, lo]) => [lo, la]) }) || '';
   }
 
   // ---- per-frame update ------------------------------------------------------
@@ -392,7 +401,6 @@ class SatelliteTracker extends HTMLElement {
     const cfg = this.config;
     this._satLL = [lat, lon];
     this._satAlt = alt;
-    if (cfg.footprint) this._footLL = this._computeFootprint(lat, lon, alt);
     if (cfg.track && now - this._lastTrackAt > 30000) { this._trackLL = this._computeTrack(now); this._lastTrackAt = +now; }
     if (cfg.terminator && now - this._lastTermAt > 20000) { this._termLL = this._computeTerminator(now); this._lastTermAt = +now; }
     if (cfg.passes && this._observer && now - this._lastPassAt > 60000) {
@@ -426,48 +434,34 @@ class SatelliteTracker extends HTMLElement {
     return pts;
   }
 
-  _computeFootprint(lat, lon, alt) {
-    const ang = Math.acos(EARTH_RADIUS_KM / (EARTH_RADIUS_KM + alt));
-    const latR = lat * DEG, lonR = lon * DEG;
-    const pts = [];
-    for (let b = 0; b <= 360; b += 5) {
-      const [la, lo] = destination(latR, lonR, b * DEG, ang);
-      let lonDeg = (lo / DEG);
-      lonDeg = (((lonDeg + 180) % 360) + 360) % 360 - 180;
-      pts.push([la / DEG, lonDeg]);
-    }
-    return pts;
-  }
-
   _computeTerminator(now) {
     const sun = subsolarPoint(now);
-    const tanDecl = Math.tan(sun.decl);
-    const pts = [];
-    for (let lon = -180; lon <= 180; lon += 2) {
-      const h = (lon - sun.lon) * DEG;
-      const latRad = Math.atan(-Math.cos(h) / tanDecl);
-      pts.push([latRad / DEG, lon]);
-    }
-    return { pts, decl: sun.decl };
+    return { lat: sun.lat, lon: sun.lon };
   }
 
   // Re-project all cached geometry into the current view.
   _redrawGeo() {
+    if (!this._path) return;
+    this._sync();
     const e = this._els;
-    e.track.setAttribute('d', this._trackLL.length ? this._pathFrom(this._trackLL) : '');
+    const cfg = this.config;
 
-    // Footprint (coverage area).
-    //  - Globe: the true geodesic circle (already looks circular under orthographic).
-    //  - Map: a clean screen-space circle around the marker. A real footprint is an
-    //    oval on an equirectangular map; we draw a tidy circle sized to the coverage
-    //    radius so it reads as an intentional "range ring" rather than a distorted blob.
-    const hasFoot = this._footLL.length && this._satLL && this._satAlt != null;
-    if (this._view === 'globe' && hasFoot) {
-      e.footprint.setAttribute('d', this._pathFrom(this._footLL, true));
+    // ground track
+    e.track.setAttribute('d', this._trackLL.length ? this._line(this._trackLL) : '');
+
+    // footprint (coverage area)
+    //  - Globe: the true geodesic circle (looks circular under orthographic).
+    //  - Map: a clean screen-space circle around the marker, since a real
+    //    footprint projects to a distorted oval on an equirectangular map.
+    const hasFoot = cfg.footprint && this._satLL && this._satAlt != null;
+    const footDeg = hasFoot ? Math.acos(EARTH_RADIUS_KM / (EARTH_RADIUS_KM + this._satAlt)) / DEG : 0;
+    if (hasFoot && this._view === 'globe') {
+      // eslint-disable-next-line no-undef
+      const circle = d3.geoCircle().center([this._satLL[1], this._satLL[0]]).radius(footDeg)();
+      e.footprint.setAttribute('d', this._path(circle) || '');
       e.footring.style.display = 'none';
-    } else if (this._view === 'map' && hasFoot) {
-      const p = this._project(this._satLL[0], this._satLL[1]);
-      const footDeg = Math.acos(EARTH_RADIUS_KM / (EARTH_RADIUS_KM + this._satAlt)) / DEG;
+    } else if (hasFoot && this._view === 'map') {
+      const p = this._projectPoint(this._satLL[0], this._satLL[1]);
       const r = (footDeg / 180) * VB_H;
       e.footring.setAttribute('cx', p.x.toFixed(1));
       e.footring.setAttribute('cy', p.y.toFixed(1));
@@ -479,29 +473,24 @@ class SatelliteTracker extends HTMLElement {
       e.footring.style.display = 'none';
     }
 
-    // terminator
-    if (this._termLL) {
-      if (this._view === 'map') {
-        const nightPoleY = this._termLL.decl >= 0 ? VB_H : 0;
-        let d = this._pathFrom(this._termLL.pts);
-        d += `L${VB_W},${nightPoleY}L0,${nightPoleY}Z`;
-        e.night.setAttribute('d', d);
-        e.night.setAttribute('class', 'night fill');
-      } else {
-        e.night.setAttribute('d', this._pathFrom(this._termLL.pts));
-        e.night.setAttribute('class', 'night line');
-      }
+    // day/night terminator: the night hemisphere is a 90°-radius circle around
+    // the antisolar point — clipped correctly on both views by d3.
+    if (cfg.terminator && this._termLL) {
+      // eslint-disable-next-line no-undef
+      const night = d3.geoCircle().center([this._termLL.lon + 180, -this._termLL.lat]).radius(90)();
+      e.night.setAttribute('d', this._path(night) || '');
+    } else {
+      e.night.setAttribute('d', '');
     }
 
-    // satellite marker
+    // satellite + observer markers
     if (this._satLL) {
-      const p = this._project(this._satLL[0], this._satLL[1]);
+      const p = this._projectPoint(this._satLL[0], this._satLL[1]);
       e.sat.setAttribute('transform', `translate(${p.x.toFixed(1)},${p.y.toFixed(1)})`);
       e.sat.style.visibility = p.v ? 'visible' : 'hidden';
     }
-    // observer marker
     if (this._observer) {
-      const p = this._project(this._observer.lat, this._observer.lon);
+      const p = this._projectPoint(this._observer.lat, this._observer.lon);
       e.observer.setAttribute('transform', `translate(${p.x.toFixed(1)},${p.y.toFixed(1)})`);
       e.observer.style.visibility = p.v ? 'visible' : 'hidden';
     } else {
@@ -671,6 +660,7 @@ class SatelliteTracker extends HTMLElement {
     this._els.stars.style.display = view === 'globe' ? '' : 'none';
     this._els.scene.setAttribute('clip-path', view === 'globe' ? 'url(#discClip)' : 'none');
     this._els.svg.style.cursor = view === 'globe' ? 'grab' : 'default';
+    this._makeProjection();
     this._drawBasemap();
     this._redrawGeo();
   }
@@ -722,44 +712,16 @@ class SatelliteTracker extends HTMLElement {
   }
 
   // ---- basemap ---------------------------------------------------------------
-  _buildLandRings(land) {
-    this._landRings = [];
-    if (!land || !land.features) return;
-    for (const feat of land.features) {
-      const geom = feat.geometry;
-      const polys = geom.type === 'Polygon' ? [geom.coordinates] : geom.coordinates;
-      for (const poly of polys) {
-        for (const ring of poly) {
-          this._landRings.push(ring.map(([lo, la]) => [la, lo]));
-        }
-      }
-    }
-  }
-
   _drawBasemap() {
+    if (!this._path) return; // d3 not loaded yet
+    this._sync();
     const g = this._els.map;
-    // graticule (sampled so it curves on the globe)
-    const grat = [];
-    for (let lon = -180; lon <= 180; lon += 30) {
-      const line = [];
-      for (let lat = -90; lat <= 90; lat += 4) line.push([lat, lon]);
-      grat.push(this._pathFrom(line));
-    }
-    for (let lat = -60; lat <= 60; lat += 30) {
-      const line = [];
-      for (let lon = -180; lon <= 180; lon += 4) line.push([lat, lon]);
-      grat.push(this._pathFrom(line));
-    }
-    // Each landmass is its own <path>. On the globe, hemisphere clipping turns
-    // rings into arcs; concatenating them into one path makes their fill winding
-    // interact and cancel out at some rotations (continents vanish). Separate
-    // paths keep every landmass filled independently.
-    const land = this._landRings
-      .map((r) => this._pathFrom(r, true))
-      .filter(Boolean)
-      .map((d) => `<path class="land" d="${d}"></path>`)
-      .join('');
-    g.innerHTML = `<path class="graticule" d="${grat.join('')}"></path>` + land;
+    // eslint-disable-next-line no-undef
+    const grat = this._path(d3.geoGraticule10()) || '';
+    const land = this._land ? (this._path(this._land) || '') : '';
+    g.innerHTML =
+      `<path class="graticule" d="${grat}"></path>` +
+      (land ? `<path class="land" d="${land}"></path>` : '');
   }
 
   // ---- DOM scaffolding -------------------------------------------------------
@@ -770,39 +732,39 @@ class SatelliteTracker extends HTMLElement {
       <style>
         :host {
           display:block;
-          --bg:#070c18; --space:#04060d; --ocean:#0d1b2e; --land:#27507a;
-          --grid:rgba(140,180,230,.18); --accent:#38bdf8; --brand:#7c5cff; --track:#67e8f9;
-          --foot:rgba(124,140,255,.95); --obs:#22e08a; --text:#eaf0fb; --muted:#9aa6bf;
-          --panel:rgba(10,16,32,.74);
+          /* Qubitrium indigo palette (#2E3192) with bright teal land for contrast */
+          --bg:#0a0c24; --space:#06081a; --ocean:#161a52; --land:#3fd9c8;
+          --grid:rgba(130,140,235,.22); --accent:#2dd4ff; --brand:#2E3192; --brand-light:#7a80e6;
+          --track:#2dd4ff; --foot:rgba(122,176,255,.95); --obs:#34e29b;
+          --text:#eef0ff; --muted:#a6abd6; --panel:rgba(14,16,52,.80);
           --font-sans:'Inter',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
           --font-mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
           font-family:var(--font-sans); color:var(--text);
         }
         .card { position:relative; background:var(--bg);
-                border:1px solid rgba(124,92,255,.28);
+                border:1px solid rgba(122,128,230,.30);
                 border-radius:16px; overflow:hidden;
                 box-shadow:0 14px 50px rgba(0,0,0,.45), 0 0 0 1px rgba(56,189,248,.06) inset; }
         .mapwrap { position:relative; width:100%; aspect-ratio:2/1; touch-action:none; }
         svg { display:block; width:100%; height:100%;
               background:radial-gradient(130% 130% at 50% 28%, #0c1730 0%, var(--space) 78%); }
         .ocean-rect { fill:url(#oceanGrad); }
-        .ocean-disc { filter:drop-shadow(0 0 34px rgba(56,189,248,.35)); }
+        .ocean-disc { filter:drop-shadow(0 0 36px rgba(80,90,220,.45)); }
         .graticule { fill:none; stroke:var(--grid); stroke-width:1; }
-        .land { fill:url(#landGrad); stroke:#bfeaff; stroke-width:1.1; stroke-linejoin:round;
+        .land { fill:url(#landGrad); stroke:#eafffb; stroke-width:1.1; stroke-linejoin:round;
                 paint-order:stroke; }
-        .night.fill { fill:rgba(2,5,16,.55); stroke:none; }
-        .night.line { fill:none; stroke:rgba(255,214,130,.6); stroke-width:1.6; stroke-dasharray:2 4; }
+        .night { fill:rgba(6,7,28,.5); stroke:none; }
         .track { fill:none; stroke:url(#trackGrad); stroke-width:2.6; stroke-linecap:round;
                  stroke-dasharray:1 9; opacity:.95; animation:flow 1.1s linear infinite; }
         @keyframes flow { to { stroke-dashoffset:-10; } }
         .footprint { fill:url(#footGrad); stroke:var(--foot); stroke-width:1.8;
-                     stroke-dasharray:7 5; filter:drop-shadow(0 0 6px rgba(124,92,255,.6)); }
+                     stroke-dasharray:7 5; filter:drop-shadow(0 0 6px rgba(122,128,230,.6)); }
         .sat .glow { fill:var(--accent); opacity:.32; }
-        .sat .halo { fill:none; stroke:var(--brand); stroke-width:2.5; opacity:.9; }
-        .sat .edge { fill:#06203a; stroke:none; }
+        .sat .halo { fill:none; stroke:var(--brand-light); stroke-width:2.5; opacity:.95; }
+        .sat .edge { fill:#0a0c2e; stroke:none; }
         .sat .core { fill:#eaffff; stroke:var(--accent); stroke-width:3.5; }
         .sat .ping { fill:none; stroke:var(--accent); stroke-width:2.4; animation:ping 2.4s ease-out infinite; }
-        .sat .ping2 { animation-delay:1.2s; stroke:var(--brand); }
+        .sat .ping2 { animation-delay:1.2s; stroke:var(--brand-light); }
         @keyframes ping { 0%{r:9;opacity:.95} 100%{r:34;opacity:0} }
         .obs .pin { fill:var(--obs); stroke:#06210f; stroke-width:1.5; }
         .obs .ring { fill:none; stroke:var(--obs); stroke-width:1.5; opacity:.6; }
@@ -811,10 +773,10 @@ class SatelliteTracker extends HTMLElement {
                  backdrop-filter:blur(6px); border:1px solid rgba(148,163,184,.2);
                  border-radius:10px; padding:10px 12px; min-width:178px; font-size:13px; line-height:1.35; }
         .brandlogo { height:22px; width:auto; max-width:120px; display:block; margin-bottom:7px;
-                     filter:drop-shadow(0 0 6px rgba(124,92,255,.5)); }
+                     filter:drop-shadow(0 0 6px rgba(122,128,230,.5)); }
         .operator { display:inline-block; font-size:10px; font-weight:800; letter-spacing:1.5px;
-                    text-transform:uppercase; color:#c7b9ff; background:rgba(124,92,255,.16);
-                    border:1px solid rgba(124,92,255,.5); border-radius:5px; padding:2px 7px; margin-bottom:6px; }
+                    text-transform:uppercase; color:#c2c5f5; background:rgba(46,49,146,.35);
+                    border:1px solid rgba(122,128,230,.6); border-radius:5px; padding:2px 7px; margin-bottom:6px; }
         .panel h3 { margin:0 0 2px; font-size:16px; font-weight:600; letter-spacing:.4px;
                     font-family:var(--font-mono); }
         .norad { color:var(--muted); font-size:11px; margin-bottom:8px; }
@@ -873,23 +835,23 @@ class SatelliteTracker extends HTMLElement {
                role="img" aria-label="Live satellite position">
             <defs>
               <radialGradient id="oceanGrad" cx="50%" cy="30%" r="90%">
-                <stop offset="0%" stop-color="#13263f"/><stop offset="100%" stop-color="${'#0d1b2e'}"/>
+                <stop offset="0%" stop-color="#1d2266"/><stop offset="100%" stop-color="#12153f"/>
               </radialGradient>
               <radialGradient id="discGrad" cx="38%" cy="32%" r="75%">
-                <stop offset="0%" stop-color="#1b3457"/><stop offset="70%" stop-color="#0d1b2e"/>
-                <stop offset="100%" stop-color="#081320"/>
+                <stop offset="0%" stop-color="#262c80"/><stop offset="70%" stop-color="#161a52"/>
+                <stop offset="100%" stop-color="#0c0e30"/>
               </radialGradient>
               <clipPath id="discClip"><circle cx="${GLOBE_CX}" cy="${GLOBE_CY}" r="${GLOBE_R}"/></clipPath>
               <linearGradient id="landGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#4f86c6"/><stop offset="100%" stop-color="#356aa3"/>
+                <stop offset="0%" stop-color="#6df0dd"/><stop offset="100%" stop-color="#2bbdb4"/>
               </linearGradient>
               <linearGradient id="trackGrad" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stop-color="#7c5cff"/><stop offset="100%" stop-color="#38bdf8"/>
+                <stop offset="0%" stop-color="#6f74e6"/><stop offset="100%" stop-color="#2dd4ff"/>
               </linearGradient>
               <radialGradient id="footGrad" cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stop-color="rgba(124,92,255,0)"/>
-                <stop offset="75%" stop-color="rgba(56,189,248,.05)"/>
-                <stop offset="100%" stop-color="rgba(56,189,248,.18)"/>
+                <stop offset="0%" stop-color="rgba(45,212,255,0)"/>
+                <stop offset="75%" stop-color="rgba(45,212,255,.05)"/>
+                <stop offset="100%" stop-color="rgba(122,176,255,.2)"/>
               </radialGradient>
               <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
                 <feGaussianBlur stdDeviation="3.2" result="b"/>

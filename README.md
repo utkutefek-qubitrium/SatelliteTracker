@@ -136,6 +136,7 @@ to stay accurate):
 ## Runtime dependencies (loaded from CDN)
 
 - `satellite.js` — SGP4 orbit propagation
+- `d3-geo` — map/globe projection with correct spherical clipping
 - `topojson-client` + `world-atlas` — the world basemap (optional; the tracker
   still runs if the basemap fails to load)
 
